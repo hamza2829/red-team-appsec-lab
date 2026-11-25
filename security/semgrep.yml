@@ -1,0 +1,19 @@
+rules:
+  - id: sql-string-concatenation
+    languages: [python]
+    severity: ERROR
+    message: SQL built by string concatenation of user input (SQL injection). Use parameters.
+    patterns:
+      - pattern: $CUR.execute("..." + ... + "...")
+  - id: unescaped-html-response
+    languages: [python]
+    severity: ERROR
+    message: User data interpolated into an HTML response without escaping (stored/reflected XSS).
+    patterns:
+      - pattern: return f"<...>{...}<...>"
+  - id: hardcoded-weak-jwt-secret
+    languages: [python]
+    severity: WARNING
+    message: Hard-coded/weak signing secret. Load a strong secret from the environment.
+    patterns:
+      - pattern-regex: (?i)(secret|key)\s*=\s*["']secret["']
