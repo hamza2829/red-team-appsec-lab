@@ -1,0 +1,69 @@
+name: Secure pipeline
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run: { shell: bash }
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - name: Gitleaks (failing example - planted key in history)
+        continue-on-error: true   # the lab intentionally contains a leaked key
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Secret scan is wired up (passing control)
+        run: echo "gitleaks ran; see its step/artifact for the planted-key finding"
+
+  code-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - run: pip install semgrep==1.97.0
+      - name: Semgrep - failing example (must report findings)
+        run: |
+          set +e
+          semgrep --config security/semgrep.yml security/examples/failing.py --error --json > sg.json
+          code=$?
+          python - <<'PY'
+          import json
+          n = len(json.load(open("sg.json"))["results"])
+          print(f"semgrep findings on failing example: {n}")
+          raise SystemExit(0 if n >= 3 else 1)
+          PY
+      - name: Semgrep - passing example (must be clean)
+        run: semgrep --config security/semgrep.yml security/examples/passing.py --error
+      - name: Semgrep - full repo (report only, uploaded)
+        continue-on-error: true
+        run: semgrep --config security/semgrep.yml --config p/python --sarif -o semgrep.sarif .
+      - uses: actions/upload-artifact@v4
+        with: { name: semgrep-sarif, path: semgrep.sarif }
+
+  deps-and-sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt pip-audit==2.7.3 cyclonedx-bom==5.1.1
+      - name: Dependency audit (report only)
+        continue-on-error: true
+        run: pip-audit -r requirements.txt --format markdown -o pip-audit.md || pip-audit -r requirements.txt || true
+      - name: Generate CycloneDX SBOM
+        run: cyclonedx-py requirements requirements.txt --output-format JSON --outfile sbom.json
+      - name: SBOM sanity check
+        run: python -c "import json,sys; d=json.load(open('sbom.json')); print('components:',len(d.get('components',[]))); sys.exit(0 if d.get('components') else 1)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deps-sbom
+          path: |
+            sbom.json
+            pip-audit.md

@@ -1,0 +1,62 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+defaults:
+  run: { shell: bash }
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - run: pip install ruff==0.17.6
+      - run: ruff check .
+      - run: ruff format --check .
+
+  retest:
+    name: re-test (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [vuln, fixed]
+    env:
+      APP_MODE: ${{ matrix.mode }}
+      JWT_SECRET: ci-strong-secret-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }  # leaked-key PoC scans history
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt
+      - name: Re-test harness (proves vuln in vuln mode, fix in fixed mode)
+        run: python -m pytest tests/ -v --junitxml=retest-${{ matrix.mode }}.xml
+      - name: Agent boundary tests
+        run: python -m pytest agent/ -v
+      - name: Agent report
+        run: python agent/report.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: retest-${{ matrix.mode }}
+          path: |
+            retest-${{ matrix.mode }}.xml
+            docs/agent-report-${{ matrix.mode }}.md
+
+  build-report:
+    runs-on: ubuntu-latest
+    needs: retest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - run: python scripts/build_site.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: findings-report
+          path: docs/
