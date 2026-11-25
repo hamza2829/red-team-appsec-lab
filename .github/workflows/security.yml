@@ -23,11 +23,14 @@ jobs:
 
   code-scan:
     runs-on: ubuntu-latest
+    env:
+      SEMGREP_SEND_METRICS: "off"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with: { python-version: "3.12" }
-      - run: pip install semgrep==1.97.0
+      # setuptools<81 keeps pkg_resources available for semgrep's telemetry imports.
+      - run: pip install "setuptools<81" semgrep==1.97.0
       - name: Semgrep - failing example (must report findings)
         run: |
           set +e
@@ -53,12 +56,12 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with: { python-version: "3.12" }
-      - run: pip install -r requirements.txt pip-audit==2.7.3 cyclonedx-bom==5.1.1
+      # pip-audit and cyclonedx-bom have conflicting deps, so run each isolated via pipx.
       - name: Dependency audit (report only)
         continue-on-error: true
-        run: pip-audit -r requirements.txt --format markdown -o pip-audit.md || pip-audit -r requirements.txt || true
+        run: pipx run --spec pip-audit==2.7.3 pip-audit -r requirements.txt --format markdown -o pip-audit.md
       - name: Generate CycloneDX SBOM
-        run: cyclonedx-py requirements requirements.txt --output-format JSON --outfile sbom.json
+        run: pipx run --spec cyclonedx-bom==5.1.1 cyclonedx-py requirements requirements.txt --output-format JSON --outfile sbom.json
       - name: SBOM sanity check
         run: python -c "import json,sys; d=json.load(open('sbom.json')); print('components:',len(d.get('components',[]))); sys.exit(0 if d.get('components') else 1)"
       - uses: actions/upload-artifact@v4
