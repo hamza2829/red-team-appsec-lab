@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Ticket Lab (self-test target)</title></head>
+<body>
+<h1>Ticket Lab</h1>
+<p><strong>Deliberately vulnerable self-test system. Do not use real data.</strong></p>
+<form onsubmit="login(event)">
+  <input id="u" placeholder="username" value="alice">
+  <input id="p" placeholder="password" value="alice-pw" type="password">
+  <button>Log in</button>
+</form>
+<pre id="out"></pre>
+<script>
+async function login(e){
+  e.preventDefault();
+  const r = await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({username:u.value,password:p.value})});
+  const j = await r.json();
+  document.getElementById('out').textContent = JSON.stringify(j,null,2);
+}
+</script>
+</body>
+</html>

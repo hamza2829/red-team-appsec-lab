@@ -1,0 +1,13 @@
+[tool.pytest.ini_options]
+testpaths = ["tests", "agent"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["security/examples/failing.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S"]
+# Intentional insecurities live in the vuln build; flag them in review, not CI noise.
+per-file-ignores = {"app/*" = ["S105", "S608", "S104", "S324"], "attacks/*" = ["S101", "S105", "S603", "S607", "S608"], "tests/*" = ["S101"], "agent/*" = ["S101"], "scripts/*" = ["S101"]}

@@ -1,0 +1,5 @@
+-r requirements.txt
+ruff==0.17.6
+semgrep==1.97.0
+pip-audit==2.7.3
+cyclonedx-bom==5.1.1
